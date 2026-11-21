@@ -258,6 +258,12 @@ impl Params {
     pub fn output_angle(&self, psi: f64) -> f64 {
         -psi / self.zd() as f64
     }
+    /// Angle of output hole j in the frame of disc `disc`. Disc 1 is turned by −π/Zd (see
+    /// `disc_pose`), so its hole pattern is cut at +π/Zd to stay on the output pins.
+    pub fn hole_angle(&self, j: usize, disc: usize) -> f64 {
+        let ph = if disc == 0 { 0.0 } else { PI / self.zd() as f64 };
+        TAU * j as f64 / self.zw.max(1) as f64 + ph
+    }
     /// Housing angle of ring pin k.
     pub fn pin_angle(&self, k: usize) -> f64 {
         TAU * k as f64 / self.zp as f64
@@ -531,6 +537,22 @@ mod tests {
                     let local = [co * w[0] - s * w[1], s * w[0] + co * w[1]];
                     let d = dense.iter().map(|t| len(sub(*t, local))).fold(f64::INFINITY, f64::min);
                     assert!(d < 0.01, "pin {k} disc {disc} psi {psi}: {d}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn output_holes_sit_e_from_output_pins_on_both_discs() {
+        let q = p();
+        for psi in [0.0, 1.3, 4.0] {
+            for disc in 0..2 {
+                let (c, rot) = q.disc_pose(psi, disc);
+                for j in 0..q.zw as usize {
+                    let hole = polar(q.rw, q.hole_angle(j, disc) + rot);
+                    let hole = [hole[0] + c[0], hole[1] + c[1]];
+                    let pin = polar(q.rw, q.output_angle(psi) + TAU * j as f64 / q.zw as f64);
+                    assert!((len(sub(hole, pin)) - q.e).abs() < 1e-9, "disc {disc} hole {j}");
                 }
             }
         }

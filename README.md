@@ -17,9 +17,10 @@
   최대 출력 토크, 입력 회전수, 출력 핀 수·지름·핀 원 반경, 편심 베어링 구멍 지름, 재료 프리셋(일반값).
 - **결과**: 감속비, K1, 최소 곡률반경, 압력각 분포, 핀별 하중, 헤르츠 접촉 응력, 편심 베어링 하중, 출력 핀 하중,
   출력 구멍 여유, 프로파일 둘레, 회전수·요동 주파수 — 각 검토 항목별 통과/주의/불가와 종합 상태.
-- **설계 탐색**: 목표 감속비와 최대 외경으로 e(0.5–3 mm, 0.25 간격), dp(목록), Rp(1 mm 간격)를 훑어 모든 검토를
-  통과하는 상위 12개를 보여줍니다. 행을 누르면 불러옵니다.
-- **내보내기**: 디스크 프로파일 SVG / DXF(LWPOLYLINE, mm, 보어·출력 구멍 원 포함). 브라우저 안에서 Blob으로 생성 — 네트워크 없음.
+- **설계 탐색**: 목표 감속비와 최대 외경으로 e(0.5–3 mm, 0.25 간격), dp(목록), Rp(1 mm 간격)를 훑어 불가 항목이 없는
+  설계 중 상위 12개를 (통과 항목 수 → 응력 여유 → 외경 순, 주의는 아래로) 보여줍니다. 행을 누르면 불러옵니다.
+- **내보내기**: 디스크 프로파일 SVG / DXF(LWPOLYLINE, mm, 보어·출력 구멍 원 포함). 1번 디스크 기준이며,
+  2장일 때 2번 디스크는 로브 대비 출력 구멍이 180°/Zd 돌아가 있습니다 (Zd 홀수 · 출력 핀 짝수면 같은 부품을 180° 돌려 조립). 브라우저 안에서 Blob으로 생성 — 네트워크 없음.
 - **3D 뷰**: 하우징 핀, 압출된 사이클로이드 디스크(실제 보어·출력 구멍), 편심 입력축, 출력 핀과 플랜지, 하우징.
   애니메이션(재생/일시정지, 슬로모션 기본 0.25×, 시간 슬라이더), 하중 색상·화살표, 압력각 색상, 반투명, 분해도.
 - **2D 그래프**: 현재 순간의 핀별 하중, 프로파일 파라미터별 압력각, 상면도(이론 곡선 vs 오프셋 곡선).
@@ -72,9 +73,10 @@ stresses and bearing loads at my peak torque, and can I export the disc profile 
   eccentric-bearing load, output-pin load, output-hole clearance, profile perimeter, speeds and wobble frequency — each check
   OK / warning / fail plus an overall status.
 - **Find designs**: for a target ratio and max OD, sweeps e (0.5–3 mm, step 0.25), dp (from a list) and Rp (1 mm steps),
-  lists the top 12 that pass every check, sorted by (OK checks, stress margin, OD). Click a row to load it.
-- **Export**: disc profile as SVG or DXF (LWPOLYLINE, mm, plus bore and output-hole circles), generated in the browser
-  via a Blob download — no network.
+  lists the top 12 with no failing check, sorted by (OK checks, stress margin, OD) so warnings rank lower. Click a row to load it.
+- **Export**: disc profile as SVG or DXF (LWPOLYLINE, mm, plus bore and output-hole circles), for disc 1 (with two discs,
+  disc 2 has its holes turned by 180°/Zd relative to the lobes — the identical part turned 180° when Zd is odd and the
+  output-pin count even), generated in the browser via a Blob download — no network.
 - **3D view**: housing pins, extruded cycloid disc(s) with real bore and output holes, eccentric input shaft, output pins and
   flange, simple housing; animated (play/pause, slow motion default 0.25×, time slider); force colouring and arrows,
   pressure-angle edge colouring, translucent housing / discs, exploded view.

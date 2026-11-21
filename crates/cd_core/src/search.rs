@@ -2,7 +2,7 @@
 //! e = 0.5…3 mm (step 0.25), dp from `DP_LIST` and Rp in 1 mm steps up to the OD limit
 //! (OD = 2·(Rp + dp)). Output pins keep the user's count / Ø and sit midway between the bore and
 //! the profile valleys. Keeps the best Rp per (e, dp), drops anything with a failing check and
-//! sorts by (number of OK checks ↓, stress margin ↓, OD ↑).
+//! sorts by (number of OK checks ↓, stress margin ↓, OD ↑), so designs with warnings rank lower.
 use crate::{Params, Status};
 
 pub const DP_LIST: [f64; 7] = [2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0];

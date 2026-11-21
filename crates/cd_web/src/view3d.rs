@@ -5,7 +5,7 @@
 use crate::gl::{self, Geo, Mesh, Paint, Renderer};
 use crate::math::{self, Orbit, OrbitCam, M4, V};
 use crate::plot2d::{alpha_col, heat};
-use cd_core::{export::hole_centres, Design};
+use cd_core::{export::hole_centres_of, Design};
 use web_sys::HtmlCanvasElement;
 
 /// Scene units per mm (1 unit = 10 mm).
@@ -79,7 +79,8 @@ pub struct View3d {
     cyl: Mesh,
     sph: Mesh,
     head: Mesh,
-    disc: Option<Mesh>,
+    /// One mesh per disc: disc 1's hole pattern is turned by π/Zd.
+    disc: [Option<Mesh>; 2],
     rim: Option<Mesh>,
     housing: Option<Mesh>,
     pin_batch: Option<Mesh>,
@@ -101,7 +102,7 @@ impl View3d {
             canvas,
             cam: OrbitCam::new(Orbit { target: [0.0; 3], yaw: 0.7, pitch: 0.5, dist: 20.0 }),
             hover: Hit::None,
-            disc: None,
+            disc: [None, None],
             rim: None,
             housing: None,
             pin_batch: None,
@@ -131,35 +132,16 @@ impl View3d {
         let p = &d.p;
         let l = layout(d, 0.0);
         let rh = d.hole_d / 2.0;
-        let holes = hole_centres(d);
-        let (mut bore, mut near, mut far, mut outer) = (vec![], vec![], vec![], vec![]);
-        for q in &d.prof {
-            let rq = q[0].hypot(q[1]);
-            let u = [q[0] / rq, q[1] / rq];
-            let (mut a, mut b) = (p.rw, p.rw);
-            for h in &holes {
-                let t = h[0] * u[0] + h[1] * u[1];
-                let d2 = h[0] * h[0] + h[1] * h[1] - t * t;
-                if t > 0.0 && d2 < rh * rh {
-                    let w = (rh * rh - d2).sqrt();
-                    (a, b) = (t - w, t + w);
-                }
+        for k in 0..2 {
+            let mut slot = self.disc[k].take();
+            if k < p.discs as usize {
+                self.swap(&mut slot, &disc_geo(d, &hole_centres_of(d, k), rh, l.b));
+            } else if let Some(m) = slot.take() {
+                self.r.free(m);
             }
-            let lo = p.bore / 2.0 + 0.05;
-            let hi = rq - 0.05;
-            let at = |r: f64| xz([u[0] * r, u[1] * r]);
-            bore.push(at(p.bore / 2.0));
-            near.push(at(a.clamp(lo, hi)));
-            far.push(at(b.clamp(lo, hi)));
-            outer.push(xz(*q));
+            self.disc[k] = slot;
         }
-        let mut g = gl::prism(&bore, &near, l.b);
-        let g2 = gl::prism(&far, &outer, l.b);
-        g.pos.extend(g2.pos);
-        g.nrm.extend(g2.nrm);
-        let mut disc = None;
-        self.swap(&mut disc, &g);
-        self.disc = disc;
+
 
         // Pressure-angle ribbon just outside the disc wall.
         let mut rg = Geo::default();
@@ -313,8 +295,8 @@ impl View3d {
         if let Some(m) = &self.pin_batch {
             r.shadow(m, &id);
         }
-        if let Some(m) = &self.disc {
-            for k in 0..p.discs as usize {
+        for k in 0..p.discs as usize {
+            if let Some(m) = &self.disc[k] {
                 r.shadow(m, &disc_m(k));
             }
         }
@@ -364,11 +346,9 @@ impl View3d {
 
         let disc_cols = [[0.36, 0.56, 0.88], [0.86, 0.56, 0.32]];
         let disc_a = if tg.disc_glass { 0.35 } else { 1.0 };
-        if let Some(m) = &self.disc {
-            if !tg.disc_glass {
-                for k in 0..p.discs as usize {
-                    r.draw(m, &disc_m(k), glow(lit(disc_cols[k], 1.0), self.hover == Hit::Disc));
-                }
+        for (k, col) in disc_cols.iter().enumerate().take(p.discs as usize) {
+            if let (Some(m), false) = (&self.disc[k], tg.disc_glass) {
+                r.draw(m, &disc_m(k), glow(lit(*col, 1.0), self.hover == Hit::Disc));
             }
         }
         if tg.pa {
@@ -400,11 +380,9 @@ impl View3d {
             }
         }
         // Translucent last: discs, then housing ring.
-        if let Some(m) = &self.disc {
-            if tg.disc_glass {
-                for k in 0..p.discs as usize {
-                    r.draw(m, &disc_m(k), glow(lit(disc_cols[k], disc_a), self.hover == Hit::Disc));
-                }
+        for (k, col) in disc_cols.iter().enumerate().take(p.discs as usize) {
+            if let (Some(m), true) = (&self.disc[k], tg.disc_glass) {
+                r.draw(m, &disc_m(k), glow(lit(*col, disc_a), self.hover == Hit::Disc));
             }
         }
         if tg.glass {
@@ -414,6 +392,38 @@ impl View3d {
             r.draw(m, &id, lit([0.48, 0.52, 0.60], if tg.glass { 0.16 } else { 1.0 }));
         }
     }
+}
+
+/// Disc solid with real bore and output holes from two `prism()` calls split at the output-pin
+/// circle: bore → near hole edge, far hole edge → profile (both Rw where a ray misses the holes).
+fn disc_geo(d: &Design, holes: &[[f64; 2]], rh: f64, h: f32) -> Geo {
+    let p = &d.p;
+    let (mut bore, mut near, mut far, mut outer) = (vec![], vec![], vec![], vec![]);
+    for q in &d.prof {
+        let rq = q[0].hypot(q[1]);
+        let u = [q[0] / rq, q[1] / rq];
+        let (mut a, mut b) = (p.rw, p.rw);
+        for c in holes {
+            let t = c[0] * u[0] + c[1] * u[1];
+            let d2 = c[0] * c[0] + c[1] * c[1] - t * t;
+            if t > 0.0 && d2 < rh * rh {
+                let w = (rh * rh - d2).sqrt();
+                (a, b) = (t - w, t + w);
+            }
+        }
+        let lo = p.bore / 2.0 + 0.05;
+        let hi = rq - 0.05;
+        let at = |r: f64| xz([u[0] * r, u[1] * r]);
+        bore.push(at(p.bore / 2.0));
+        near.push(at(a.clamp(lo, hi)));
+        far.push(at(b.clamp(lo, hi)));
+        outer.push(xz(*q));
+    }
+    let mut g = gl::prism(&bore, &near, h);
+    let g2 = gl::prism(&far, &outer, h);
+    g.pos.extend(g2.pos);
+    g.nrm.extend(g2.nrm);
+    g
 }
 
 /// Ray vs vertical (y) cylinder of radius `r` around (c.x, c.z), limited to y0..y1: nearest t.

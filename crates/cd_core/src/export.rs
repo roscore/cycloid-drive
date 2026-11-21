@@ -1,16 +1,21 @@
 //! Disc profile export (mm, disc frame): SVG and DXF (one closed LWPOLYLINE for the profile,
 //! CIRCLE entities for the bore and the output holes).
 use crate::Design;
-use std::f64::consts::TAU;
 use std::fmt::Write;
 
-/// Output-hole centres in the disc frame (on the output pin circle, hole 0 on +x).
-pub fn hole_centres(d: &Design) -> Vec<[f64; 2]> {
-    let n = d.p.zw as usize;
-    (0..n).map(|j| {
-        let a = TAU * j as f64 / n as f64;
+/// Output-hole centres of disc `disc` in its own frame (on the output pin circle).
+pub fn hole_centres_of(d: &Design, disc: usize) -> Vec<[f64; 2]> {
+    (0..d.p.zw as usize).map(|j| {
+        let a = d.p.hole_angle(j, disc);
         [d.p.rw * a.cos(), d.p.rw * a.sin()]
     }).collect()
+}
+
+/// Output-hole centres of disc 0 (hole 0 on +x); exports describe this disc. Disc 1's holes are
+/// turned by π/Zd relative to its lobes (`Params::hole_angle`): the same part turned by π when Zd is
+/// odd and the output-pin count even.
+pub fn hole_centres(d: &Design) -> Vec<[f64; 2]> {
+    hole_centres_of(d, 0)
 }
 
 /// Standalone SVG drawing, 1 user unit = 1 mm, y up as in CAD (flipped with a transform).
