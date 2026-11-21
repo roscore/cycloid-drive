@@ -20,4 +20,5 @@ features = [
   "DomRect", "DomTokenList", "MediaQueryList", "Node", "Event", "EventTarget", "MouseEvent", "PointerEvent", "WheelEvent",
   "WebGl2RenderingContext", "WebGlBuffer", "WebGlProgram", "WebGlShader", "WebGlUniformLocation",
   "WebGlVertexArrayObject", "WebGlContextAttributes", "Storage",
+  "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "Performance",
 ]

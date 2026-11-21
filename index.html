@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+<meta name="referrer" content="no-referrer">
+<title>cycloid-drive</title>
+<link data-trunk rel="rust" href="crates/cd_web/Cargo.toml" data-wasm-opt="z">
+<link data-trunk rel="copy-file" href="web/boot.js">
+<style>
+:root {
+  --bg: #0d1117; --panel: rgba(22, 27, 34, 0.92); --card: #161b22; --line: #2d333b; --text: #e6edf3;
+  --muted: #8b949e; --accent: #f0883e; --accent2: #58a6ff; --ok: #3fb950; --warn: #d29922; --fail: #f85149;
+  --field: #0d1117; --radius: 12px; --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #eef1f5; --panel: rgba(255, 255, 255, 0.93); --card: #ffffff; --line: #d0d7de; --text: #1f2328;
+    --muted: #57606a; --accent: #bc4c00; --accent2: #0969da; --ok: #1a7f37; --warn: #9a6700; --fail: #cf222e;
+    --field: #f6f8fa; --shadow: 0 8px 28px rgba(31, 35, 40, 0.18);
+    color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); overflow: hidden; }
+#view, #flat { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#flat { background: var(--bg); top: 64px; width: calc(100% - 368px); height: calc(100% - 124px); }
+[hidden] { display: none !important; }
+.float { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
+#bar { top: 12px; left: 12px; display: flex; align-items: center; gap: 4px; padding: 4px 6px; flex-wrap: wrap; max-width: calc(100vw - 380px); }
+#bar h1 { font-size: 14px; margin: 0 8px 0 4px; font-weight: 650; white-space: nowrap; }
+#bar h1 b { color: var(--accent); }
+.sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+button, select, input { font: inherit; color: var(--text); }
+.tb { position: relative; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; height: 32px; min-width: 32px; padding: 0 8px; cursor: pointer; }
+.tb:hover { border-color: var(--line); }
+.tb.on { background: color-mix(in srgb, var(--accent2) 22%, transparent); border-color: var(--accent2); }
+.tb[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 38px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: var(--card); border: 1px solid var(--line); padding: 3px 8px; border-radius: 6px; font-size: 12px; z-index: 9; pointer-events: none; }
+select.tb { padding: 0 6px; background: var(--field); border-color: var(--line); }
+#hud { left: 12px; bottom: 64px; padding: 8px 12px; display: grid; grid-template-columns: auto auto; gap: 1px 14px; font-size: 12.5px; font-variant-numeric: tabular-nums; pointer-events: none; min-width: 250px; }
+#hud .k { color: var(--muted); }
+#hud .v { text-align: right; }
+#hud .big { grid-column: 1 / -1; font-size: 15px; font-weight: 650; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 12px; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .fail { color: var(--fail); }
+#time { left: 12px; bottom: 12px; display: flex; align-items: center; gap: 8px; padding: 4px 10px; width: min(560px, calc(100vw - 380px)); }
+#time input[type=range] { flex: 1; accent-color: var(--accent); }
+#time label { color: var(--muted); font-size: 12px; }
+#panel { top: 12px; right: 12px; width: 344px; max-height: calc(100% - 24px); overflow-y: auto; padding: 6px; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin: 6px 0; }
+summary { cursor: pointer; padding: 8px 12px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+summary::after { content: "▾"; color: var(--muted); }
+details:not([open]) summary::after { content: "▸"; }
+.body { padding: 2px 12px 10px; }
+.row { display: grid; grid-template-columns: 1fr 104px; align-items: center; gap: 8px; margin: 5px 0; }
+.row label { color: var(--muted); font-size: 12.5px; }
+.row input, .row select { width: 100%; background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.row select { grid-column: 2; }
+.row.wide { grid-template-columns: 1fr 1.6fr; }
+ul.checks { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+ul.checks li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+ul.checks li span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.plot { width: 100%; height: 150px; display: block; margin: 4px 0 8px; border: 1px solid var(--line); border-radius: 8px; }
+.plot.sq { height: 240px; }
+.cap { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.btn { white-space: nowrap; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent2); }
+.btn.pri { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+th, td { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent2) 14%, transparent); }
+#hint { left: 50%; top: 64px; transform: translateX(-50%); padding: 10px 14px; max-width: min(560px, calc(100vw - 24px)); display: flex; gap: 12px; align-items: center; font-size: 13px; }
+#nogl { left: 12px; top: 64px; max-width: calc(100vw - 392px); padding: 10px 14px; color: var(--warn); }
+.note { font-size: 11.5px; color: var(--muted); margin: 8px 4px 4px; }
+@media (max-width: 760px) {
+  #view, #flat { height: 56%; }
+  #bar { max-width: none; right: 12px; flex-wrap: nowrap; overflow-x: auto; gap: 2px; }
+  #bar h1, .sep { display: none; }
+  .tb[data-tip]:hover::after { display: none; }
+  #flat { top: 58px; width: 100%; height: calc(56% - 58px); }
+  #hud { pointer-events: auto; cursor: pointer; }
+  #hud:not(.open) .k, #hud:not(.open) .v { display: none; }
+  #hud .big { margin: 0; }
+  #nogl { max-width: calc(100vw - 24px); top: auto; bottom: calc(44% + 64px); }
+  #hud .big::after { content: "▾"; color: var(--muted); margin-left: 8px; }
+  #hud.open .big::after { content: "▴"; }
+  #panel { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 44%; border-radius: var(--radius) var(--radius) 0 0; }
+  #hud { top: 58px; bottom: auto; left: 8px; right: auto; min-width: 0; font-size: 11.5px; padding: 6px 10px; gap: 0 10px; }
+  #time { bottom: calc(44% + 8px); width: calc(100vw - 24px); }
+  #hint { top: auto; bottom: calc(44% + 60px); font-size: 12px; }
+  #time { left: 8px; }
+}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<canvas id="flat" hidden></canvas>
+
+<div id="bar" class="float">
+  <h1><b>◎</b> <span data-i18n="title">Cycloid drive designer</span></h1>
+  <button class="tb on" id="t_play" data-i18n-tip="t_play">❚❚</button>
+  <button class="tb on" id="t_force" data-i18n-tip="t_force">F</button>
+  <button class="tb" id="t_pa" data-i18n-tip="t_pa">α</button>
+  <button class="tb on" id="t_glass" data-i18n-tip="t_glass"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke-dasharray="2.2 1.8"/><circle cx="8" cy="8" r="2"/></svg></button>
+  <button class="tb" id="t_disc" data-i18n-tip="t_disc"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 1.8l1.6 2.3 2.7-.6.3 2.7 2.4 1.3-1.6 2.2 1 2.6-2.7.3-1 2.6L8 13.7l-2.3 1.5-1-2.6-2.7-.3 1-2.6L1.4 7.5l2.4-1.3.3-2.7 2.7.6z" fill="currentColor" fill-opacity=".3"/></svg></button>
+  <button class="tb" id="t_explode" data-i18n-tip="t_explode"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 2.5h10M3 8h10M3 13.5h10M8 4v2.5M8 9.5V12"/></svg></button>
+  <span class="sep"></span>
+  <select class="tb" id="viewsel" data-i18n-tip="t_view">
+    <option value="0" data-i18n="v_persp">Perspective</option>
+    <option value="1" data-i18n="v_front">Front (axial)</option>
+    <option value="2" data-i18n="v_side">Side</option>
+    <option value="3" data-i18n="v_expl">Exploded</option>
+  </select>
+  <button class="tb" id="t_lang" data-i18n-tip="t_lang">KO</button>
+</div>
+
+<div id="hud" class="float"></div>
+
+<div id="time" class="float">
+  <label for="speed" data-i18n="speed">Speed</label>
+  <select class="tb" id="speed">
+    <option value="1">1×</option>
+    <option value="0.25" selected>0.25×</option>
+    <option value="0.05">0.05×</option>
+    <option value="0.01">0.01×</option>
+  </select>
+  <label for="scrub" data-i18n="time">Time</label>
+  <input type="range" id="scrub" min="0" max="1" step="0.0005" value="0">
+</div>
+
+<div id="hint" class="float" hidden>
+  <span data-i18n="hint">Example loaded.</span>
+  <button class="btn" id="hint_ok" data-i18n="hint_ok">Got it</button>
+</div>
+<div id="nogl" class="float" hidden data-i18n="nogl">WebGL2 is not available.</div>
+
+<aside id="panel" class="float">
+  <details open>
+    <summary data-i18n="c_geo">Geometry</summary>
+    <div class="body">
+      <div class="row"><label for="zp" data-i18n="zp">Ring pins Zp</label><input id="zp" type="number" min="8" max="60" step="1"></div>
+      <div class="row"><label for="rp" data-i18n="rp">Pin circle radius Rp (mm)</label><input id="rp" type="number" min="10" max="300" step="0.5"></div>
+      <div class="row"><label for="e" data-i18n="e">Eccentricity e (mm)</label><input id="e" type="number" min="0.05" max="10" step="0.05"></div>
+      <div class="row"><label for="dp" data-i18n="dp">Pin diameter dp (mm)</label><input id="dp" type="number" min="1" max="40" step="0.5"></div>
+      <div class="row"><label for="b" data-i18n="b">Disc thickness b (mm)</label><input id="b" type="number" min="1" max="60" step="0.5"></div>
+      <div class="row"><label for="discs" data-i18n="discs">Discs</label>
+        <select id="discs"><option value="1" data-i18n="d1">1</option><option value="2" data-i18n="d2">2 (180°)</option></select></div>
+      <div class="row"><label for="bore" data-i18n="bore">Bearing bore Ø (mm)</label><input id="bore" type="number" min="2" max="200" step="0.5"></div>
+    </div>
+  </details>
+  <details open>
+    <summary data-i18n="c_load">Load &amp; material</summary>
+    <div class="body">
+      <div class="row"><label for="torque" data-i18n="torque">Peak output torque (N·m)</label><input id="torque" type="number" min="0" max="5000" step="0.1"></div>
+      <div class="row"><label for="rpm" data-i18n="rpm">Input speed (rpm)</label><input id="rpm" type="number" min="0" max="20000" step="10"></div>
+      <div class="row wide"><label for="mat" data-i18n="mat">Material</label>
+        <select id="mat"><option value="0" data-i18n="m0">PLA/PETG</option><option value="1" data-i18n="m1">PA-CF</option><option value="2" data-i18n="m2">Steel</option></select></div>
+    </div>
+  </details>
+  <details>
+    <summary data-i18n="c_out">Output pins</summary>
+    <div class="body">
+      <div class="row"><label for="zw" data-i18n="zw">Output pins</label><input id="zw" type="number" min="3" max="24" step="1"></div>
+      <div class="row"><label for="dw" data-i18n="dw">Output pin Ø (mm)</label><input id="dw" type="number" min="1" max="40" step="0.5"></div>
+      <div class="row"><label for="rw" data-i18n="rw">Output pin circle radius (mm)</label><input id="rw" type="number" min="2" max="250" step="0.5"></div>
+      <div class="cap" id="holecap"></div>
+    </div>
+  </details>
+  <details open>
+    <summary data-i18n="c_checks">Checks</summary>
+    <div class="body"><ul class="checks" id="checks"></ul><div class="cap" id="extra"></div></div>
+  </details>
+  <details open>
+    <summary data-i18n="c_plots">Plots</summary>
+    <div class="body">
+      <div class="cap" data-i18n="pl_force">Force per pin</div><canvas class="plot" id="p_force"></canvas>
+      <div class="cap" data-i18n="pl_pa">Pressure angle</div><canvas class="plot" id="p_pa"></canvas>
+      <div class="cap" data-i18n="pl_prof">Top view</div><canvas class="plot sq" id="p_prof"></canvas>
+    </div>
+  </details>
+  <details>
+    <summary data-i18n="c_search">Find designs</summary>
+    <div class="body">
+      <div class="row"><label for="s_ratio" data-i18n="s_ratio">Target ratio</label><input id="s_ratio" type="number" min="7" max="59" step="1" value="11"></div>
+      <div class="row"><label for="s_od" data-i18n="s_od">Max OD (mm)</label><input id="s_od" type="number" min="30" max="600" step="1" value="100"></div>
+      <button class="btn pri" id="s_go" data-i18n="s_go">Search</button>
+      <div class="cap" id="s_msg" data-i18n="s_hint">Click a row to load it</div>
+      <table><thead><tr><th>Zp</th><th>Rp</th><th>e</th><th>dp</th><th data-i18n="s_margin">margin</th><th>OD</th></tr></thead><tbody id="s_rows"></tbody></table>
+    </div>
+  </details>
+  <details>
+    <summary data-i18n="c_export">Export</summary>
+    <div class="body">
+      <button class="btn" id="x_svg" data-i18n="x_svg">Disc SVG</button>
+      <button class="btn" id="x_dxf" data-i18n="x_dxf">Disc DXF</button>
+      <div class="cap" data-i18n="x_note">mm, disc frame, generated in your browser.</div>
+    </div>
+  </details>
+  <p class="note" data-i18n="disclaimer">Educational estimates.</p>
+</aside>
+</body>
+</html>
